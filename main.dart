@@ -1,90 +1,86 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:state_management/counter_model.dart';
-import 'second_page.dart';
+import 'package:csv/csv.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:fl_chart/fl_chart.dart'; // Import pustaka fl_chart
+
+Future<List<List<dynamic>>?> readCSV() async {
+  final String csvData = await rootBundle.loadString('assets/data_sensor.csv');
+  List<List<dynamic>> rowsAsListOfValues = const CsvToListConverter().convert(csvData);
+  return rowsAsListOfValues;
+}
 
 void main() {
-  runApp(
-    ChangeNotifierProvider(
-      create: (context) => CounterModel(),
-      child: const MyApp(),
-    ),
-  );
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('CSV Reader'),
+        ),
+        body: FutureBuilder<List<List<dynamic>>?>(
+          future: readCSV(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return CircularProgressIndicator();
+            } else if (snapshot.hasError) {
+              return Text('Error: ${snapshot.error}');
+            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Text('No data available');
+            }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({super.key, required this.title});
+            // Data has been successfully loaded from CSV
+            final csvData = snapshot.data!;
+            List<double> soilHumData = [];
+            List<double> humData = [];
 
-  final String title;
+            for (var row in csvData) {
+              if (row.length >= 8) {
+                soilHumData.add(double.parse(row[0].toString()));
+                humData.add(double.parse(row[7].toString()));
+              }
+            }
 
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-/*
-* Ephemeral State
-* App State
-*
-* */
-class _MyHomePageState extends State<MyHomePage> {
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Consumer<CounterModel>(builder: (context, value, child) => Scaffold(
-      appBar: AppBar(
-
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-
-        title: Text(widget.title),
-      ),
-      body: Center(
-
-        child: Column(
-
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              value.count.toString(),
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            TextButton(
-                onPressed: (){
-                  Navigator.push(context, MaterialPageRoute(builder: (context){
-                    return SecondPage();
-                  }));
-                },
-                child: const Text("Second Page")
-            )
-          ],
+            return Column(
+              children: [
+                // Bar Chart
+                AspectRatio(
+                  aspectRatio: 1.7,
+                  child: BarChart(
+                    BarChartData(
+                      titlesData: FlTitlesData(
+                        leftTitles: SideTitles(showTitles: true),
+                        bottomTitles: SideTitles(showTitles: true),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      gridData: FlGridData(show: false),
+                      barGroups: soilHumData
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => BarChartGroupData(
+                          x: entry.key,
+                          barRods: [
+                            BarChartRodData(
+                              y: entry.value,
+                              width: 22,
+                              colors: [const Color(0xff23b6e6)],
+                            ),
+                          ],
+                        ),
+                      )
+                          .toList(),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: (){
-          final counter = context.read<CounterModel>();
-          counter.up();
-        },
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
-    ));
+    );
   }
 }
